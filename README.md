@@ -39,17 +39,14 @@ Cada módulo trae su propio Maven. Solo necesitas Java instalado.
 ```bash
 # Terminal 1 — servicios (puerto 8082)
 cd servicios-service
-mkdir -p .mvn/wrapper && cp wrapper/maven-wrapper.properties .mvn/wrapper/
 ./mvnw spring-boot:run
  
 # Terminal 2 — inventario (puerto 8083)
 cd inventario-service
-mkdir -p .mvn/wrapper && cp wrapper/maven-wrapper.properties .mvn/wrapper/
 ./mvnw spring-boot:run
  
 # Terminal 3 — citas (puerto 8081)
 cd citas-service
-mkdir -p .mvn/wrapper && cp wrapper/maven-wrapper.properties .mvn/wrapper/
 ./mvnw spring-boot:run
 ```
  
