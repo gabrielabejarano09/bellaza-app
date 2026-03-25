@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: inventario-service
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/inventario_db
+
+server:
+  port: 8083

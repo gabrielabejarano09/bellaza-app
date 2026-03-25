@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: citas-service
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/citas_db
+
+server:
+  port: 8081
+
+servicios-service:
+  url: http://localhost:8082
+
+inventario-service:
+  url: http://localhost:8083
