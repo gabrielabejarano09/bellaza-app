@@ -1,0 +1,5 @@
+spring:
+  data:
+    mongodb:
+      database: servicios_test_db
+de.flapdoodle.mongodb.embedded.version: 7.0.0
