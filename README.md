@@ -25,7 +25,7 @@ https://youtu.be/d0I5rdzz9eI
 
 ## Arquitectura Hexagonal
 
-Cada módulo implementa arquitectura hexagonal con tres capas bien definidas y separadas por interfaces (puertos).
+Cada módulo implementa arquitectura hexagonal con tres modulos diferentes y separados que se comunican por medio de rest
 
 <img width="1284" height="713" alt="image" src="https://github.com/user-attachments/assets/f37f1092-7498-4e23-b5b7-0136dea79477" />
 
