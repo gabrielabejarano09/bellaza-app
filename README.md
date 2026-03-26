@@ -9,6 +9,10 @@ Sistema backend para la gestión de un salón de belleza implementado con **arqu
 
 ---
 
+## Enlace video pruebas en postman
+
+https://youtu.be/d0I5rdzz9eI
+
 ## Módulos
 
 | Módulo | Puerto | Base de datos | Descripción |
