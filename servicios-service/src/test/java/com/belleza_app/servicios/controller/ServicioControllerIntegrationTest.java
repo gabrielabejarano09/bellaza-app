@@ -1,157 +1,226 @@
 package com.belleza_app.servicios.controller;
 
-import com.belleza_app.servicios.model.Servicio;
-import com.belleza_app.servicios.repository.ServicioRepository;
+// ─────────────────────────────────────────────────────────────────────────────
+//  PRUEBA DE INTEGRACIÓN — ServicioController
+//
+//  QUÉ prueba: el flujo completo HTTP → Controller → UseCase → MongoDB.
+//  CÓMO: @SpringBootTest + MockMvc + Flapdoodle (MongoDB embebido).
+//  MOCKS: ninguno — servicios no depende de módulos externos.
+//    Todo es real: Spring context, use cases, repositorio, MongoDB en memoria.
+//  ENDPOINTS cubiertos:
+//    POST   /api/servicios              → crear servicio
+//    GET    /api/servicios/{id}         → buscar por id
+//    GET    /api/servicios/activos      → listar activos
+//    GET    /api/servicios/{id}/activo  → verificar si está activo
+//    PATCH  /api/servicios/{id}/activar → activar servicio
+//    PATCH  /api/servicios/{id}/desactivar → desactivar servicio
+// ─────────────────────────────────────────────────────────────────────────────
+
+import com.belleza_app.servicios.domain.entities.Servicio;
+import com.belleza_app.servicios.infraestructure.adaptors.secondary.persistence.ServicioMongoRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.hamcrest.Matchers.*;
 
-/**
- * INTEGRATION TESTS para ServicioController.
- *
- * Qué son integration tests (lo que pide el profe):
- * - Prueban el BLOQUE COMPLETO: Controller → Service → Repository → MongoDB.
- * - @SpringBootTest levanta todo el contexto de Spring (como si fuera producción).
- * - Usa MongoDB EMBEBIDO (flapdoodle) para no necesitar Mongo instalado.
- * - MockMvc simula peticiones HTTP reales sin levantar el servidor en un puerto.
- * - Muy pocos o ningún Mock — todo es real.
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@DisplayName("ServicioController — integración (HTTP → UseCase → MongoDB)")
 class ServicioControllerIntegrationTest {
 
-    @Autowired
-    private MockMvc mockMvc; // simula llamadas HTTP
-
-    @Autowired
-    private ServicioRepository repository; // repositorio real con Mongo embebido
-
-    @Autowired
-    private ObjectMapper objectMapper; // convierte objetos a JSON
+    @Autowired MockMvc                mockMvc;
+    @Autowired ObjectMapper           objectMapper;
+    @Autowired ServicioMongoRepository mongoRepo;   // MongoDB real (Flapdoodle)
 
     @BeforeEach
-    void limpiarBD() {
-        // Antes de cada test limpiamos la colección para no tener datos sucios
-        repository.deleteAll();
+    void setUp() {
+        mongoRepo.deleteAll();
     }
 
-    // ─── POST /api/servicios ─────────────────────────────────────────────────
+    // ── POST /api/servicios ───────────────────────────────────────────────────
 
     @Test
-    @DisplayName("POST servicio válido → 201 Created con estado ACTIVO")
-    void crearServicio_valido_retorna201() throws Exception {
-        Servicio nuevo = new Servicio("Manicure", "Manicure completo", 30000, 45);
+    @DisplayName("POST /api/servicios → 201 y estado ACTIVO")
+    void post_retorna201_conEstadoActivo() throws Exception {
+        Servicio s = new Servicio("Manicure", "Manicure completo", 30000, 45);
 
         mockMvc.perform(post("/api/servicios")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(nuevo)))
+                        .content(json(s)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.nombre").value("Manicure"))
-                .andExpect(jsonPath("$.estado").value("ACTIVO"))
-                .andExpect(jsonPath("$.id").isNotEmpty());
+                .andExpect(jsonPath("$.nombre", is("Manicure")))
+                .andExpect(jsonPath("$.estado", is("ACTIVO")))
+                .andExpect(jsonPath("$.id", notNullValue()));
+
+        assertThat(mongoRepo.findAll()).hasSize(1);
     }
 
     @Test
-    @DisplayName("POST servicio con duración fuera de rango → 422")
-    void crearServicio_duracionInvalida_retorna422() throws Exception {
-        Servicio invalido = new Servicio("Test", "desc", 10000, 600);
+    @DisplayName("POST /api/servicios → 422 si duración fuera de rango")
+    void post_retorna422_siDuracionInvalida() throws Exception {
+        Servicio s = new Servicio("Test", "desc", 10000, 600); // 600 min > 480
 
         mockMvc.perform(post("/api/servicios")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalido)))
+                        .content(json(s)))
                 .andExpect(status().isUnprocessableEntity());
     }
 
-    // ─── GET /api/servicios/{id} ─────────────────────────────────────────────
+    @Test
+    @DisplayName("POST /api/servicios → 422 si precio es cero")
+    void post_retorna422_siPrecioCero() throws Exception {
+        Servicio s = new Servicio("Test", "desc", 0, 60);
+
+        mockMvc.perform(post("/api/servicios")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(s)))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
+    // ── GET /api/servicios/{id} ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("GET servicio existente → 200 con datos correctos")
-    void buscarPorId_existente_retorna200() throws Exception {
-        Servicio guardado = repository.save(
-                new Servicio("Pedicure", "Pedicure clásico", 35000, 60));
+    @DisplayName("GET /{id} → 200 con datos correctos")
+    void getById_retorna200_conDatos() throws Exception {
+        String id = crearServicio("Pedicure", "Pedicure clásico", 35000, 60);
 
-        mockMvc.perform(get("/api/servicios/" + guardado.getId()))
+        mockMvc.perform(get("/api/servicios/" + id))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.nombre").value("Pedicure"));
+                .andExpect(jsonPath("$.nombre", is("Pedicure")))
+                .andExpect(jsonPath("$.id", is(id)));
     }
 
     @Test
-    @DisplayName("GET servicio inexistente → 404 Not Found")
-    void buscarPorId_noExistente_retorna404() throws Exception {
-        mockMvc.perform(get("/api/servicios/id-que-no-existe"))
+    @DisplayName("GET /{id} → 404 si el servicio no existe")
+    void getById_retorna404_siNoExiste() throws Exception {
+        mockMvc.perform(get("/api/servicios/id-fantasma"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.mensaje").value(containsString("id-que-no-existe")));
+                .andExpect(jsonPath("$.mensaje", containsString("id-fantasma")));
     }
 
-    // ─── GET /api/servicios/activos ──────────────────────────────────────────
+    // ── GET /api/servicios/activos ────────────────────────────────────────────
 
     @Test
-    @DisplayName("GET activos → solo retorna servicios ACTIVOS")
-    void listarActivos_soloRetornaActivos() throws Exception {
-        Servicio activo = new Servicio("Corte", "desc", 20000, 30);
-        activo.setEstado(Servicio.EstadoServicio.ACTIVO);
-
-        Servicio inactivo = new Servicio("Masaje", "desc", 50000, 90);
-        inactivo.setEstado(Servicio.EstadoServicio.INACTIVO);
-
-        repository.save(activo);
-        repository.save(inactivo);
+    @DisplayName("GET /activos → devuelve solo los servicios ACTIVOS")
+    void getActivos_soloDevuelveActivos() throws Exception {
+        // Guardar directamente en Mongo para controlar el estado
+        guardarEnMongo("Corte", 20000, 30, Servicio.EstadoServicio.ACTIVO);
+        guardarEnMongo("Masaje", 50000, 90, Servicio.EstadoServicio.INACTIVO);
 
         mockMvc.perform(get("/api/servicios/activos"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].estado").value("ACTIVO"));
+                .andExpect(jsonPath("$[0].estado", is("ACTIVO")));
     }
 
-    // ─── PATCH activar / desactivar ──────────────────────────────────────────
-
     @Test
-    @DisplayName("PATCH desactivar → servicio pasa a INACTIVO")
-    void desactivar_retornaInactivo() throws Exception {
-        Servicio activo = repository.save(
-                new Servicio("Tinte", "Tinte completo", 80000, 120));
-
-        mockMvc.perform(patch("/api/servicios/" + activo.getId() + "/desactivar"))
+    @DisplayName("GET /activos → devuelve lista vacía si no hay activos")
+    void getActivos_listaVacia_sinActivos() throws Exception {
+        mockMvc.perform(get("/api/servicios/activos"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estado").value("INACTIVO"));
+                .andExpect(jsonPath("$", hasSize(0)));
     }
 
-    @Test
-    @DisplayName("PATCH activar servicio inactivo → pasa a ACTIVO")
-    void activar_retornaActivo() throws Exception {
-        Servicio inactivo = new Servicio("Facial", "desc", 60000, 75);
-        inactivo.setEstado(Servicio.EstadoServicio.INACTIVO);
-        inactivo = repository.save(inactivo);
-
-        mockMvc.perform(patch("/api/servicios/" + inactivo.getId() + "/activar"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estado").value("ACTIVO"));
-    }
-
-    // ─── GET /{id}/activo ────────────────────────────────────────────────────
+    // ── GET /api/servicios/{id}/activo ────────────────────────────────────────
 
     @Test
-    @DisplayName("GET /{id}/activo con servicio activo → retorna true")
-    void esActivo_servicioActivo_retornaTrue() throws Exception {
-        Servicio activo = repository.save(
-                new Servicio("Depilación", "desc", 45000, 30));
+    @DisplayName("GET /{id}/activo → true cuando el servicio está ACTIVO")
+    void esActivo_retornaTrue_cuandoActivo() throws Exception {
+        String id = crearServicio("Depilación", "desc", 45000, 30);
 
-        mockMvc.perform(get("/api/servicios/" + activo.getId() + "/activo"))
+        mockMvc.perform(get("/api/servicios/" + id + "/activo"))
                 .andExpect(status().isOk())
                 .andExpect(content().string("true"));
+    }
+
+    @Test
+    @DisplayName("GET /{id}/activo → false cuando el servicio está INACTIVO")
+    void esActivo_retornaFalse_cuandoInactivo() throws Exception {
+        String id = guardarEnMongo("Masaje", 50000, 90, Servicio.EstadoServicio.INACTIVO);
+
+        mockMvc.perform(get("/api/servicios/" + id + "/activo"))
+                .andExpect(status().isOk())
+                .andExpect(content().string("false"));
+    }
+
+    // ── PATCH /api/servicios/{id}/desactivar ──────────────────────────────────
+
+    @Test
+    @DisplayName("PATCH /{id}/desactivar → 200 y estado INACTIVO")
+    void desactivar_retorna200_estadoInactivo() throws Exception {
+        String id = crearServicio("Tinte", "Tinte completo", 80000, 120);
+
+        mockMvc.perform(patch("/api/servicios/" + id + "/desactivar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado", is("INACTIVO")));
+    }
+
+    @Test
+    @DisplayName("PATCH /{id}/desactivar → 404 si el servicio no existe")
+    void desactivar_retorna404_siNoExiste() throws Exception {
+        mockMvc.perform(patch("/api/servicios/id-fantasma/desactivar"))
+                .andExpect(status().isNotFound());
+    }
+
+    // ── PATCH /api/servicios/{id}/activar ─────────────────────────────────────
+
+    @Test
+    @DisplayName("PATCH /{id}/activar → 200 y estado ACTIVO")
+    void activar_retorna200_estadoActivo() throws Exception {
+        String id = guardarEnMongo("Facial", 60000, 75, Servicio.EstadoServicio.INACTIVO);
+
+        mockMvc.perform(patch("/api/servicios/" + id + "/activar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado", is("ACTIVO")));
+    }
+
+    @Test
+    @DisplayName("PATCH /{id}/activar → 404 si el servicio no existe")
+    void activar_retorna404_siNoExiste() throws Exception {
+        mockMvc.perform(patch("/api/servicios/id-fantasma/activar"))
+                .andExpect(status().isNotFound());
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private String json(Object obj) throws Exception {
+        return objectMapper.writeValueAsString(obj);
+    }
+
+    /** Crea un servicio vía HTTP y devuelve el id generado por MongoDB. */
+    private String crearServicio(String nombre, String desc, double precio,
+                                  int minutos) throws Exception {
+        Servicio s = new Servicio(nombre, desc, precio, minutos);
+        String resp = mockMvc.perform(post("/api/servicios")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(s)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(resp).get("id").asText();
+    }
+
+    /**
+     * Inserta directamente en MongoDB con un estado concreto.
+     * Útil para tests que necesitan un servicio INACTIVO de partida.
+     */
+    private String guardarEnMongo(String nombre, double precio, int minutos,
+                                   Servicio.EstadoServicio estado) {
+        com.belleza_app.servicios.infraestructure.adaptors.secondary.persistence.ServicioDocument doc =
+                new com.belleza_app.servicios.infraestructure.adaptors.secondary.persistence.ServicioDocument();
+        doc.setNombre(nombre);
+        doc.setPrecio(precio);
+        doc.setDuracionMinutos(minutos);
+        doc.setEstado(estado.name());
+        return mongoRepo.save(doc).getId();
     }
 }
