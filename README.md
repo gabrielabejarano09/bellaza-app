@@ -27,58 +27,8 @@ https://youtu.be/d0I5rdzz9eI
 
 Cada módulo implementa arquitectura hexagonal con tres capas bien definidas y separadas por interfaces (puertos).
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                   INFRAESTRUCTURA (adaptadores)                   │
-│                                                                    │
-│  Adaptadores Primarios (entrada)   Adaptadores Secundarios(salida)│
-│                                                                    │
-│  ┌─────────────────────┐          ┌──────────────────────────┐   │
-│  │   CitaController    │          │  CitaRepositorioAdapter  │   │
-│  │   @RestController   │          │  implements Puerto Salida│   │
-│  │                     │          │  → CitaMongoRepository   │   │
-│  │  GlobalException    │          │  → CitaDocument          │   │
-│  │  Handler            │          ├──────────────────────────┤   │
-│  └──────────┬──────────┘          │  ServicioClienteAdapter  │   │
-│             │ inyecta interfaz    │  → RestTemplate → :8082  │   │
-│             │                     ├──────────────────────────┤   │
-│  ┌──────────▼──────────┐          │  InventarioClienteAdapter│   │
-│  │   Puertos Entrada   │          │  → RestTemplate → :8083  │   │
-│  │  AgendarCitaEntrada │          └──────────────┬───────────┘   │
-│  │  ConfirmarCita...   │                         │ implementa    │
-│  │  CancelarCita...    │          ┌──────────────▼───────────┐   │
-│  │  ConsultarCita...   │          │     Puertos Salida        │   │
-│  └──────────┬──────────┘          │  CitaRepositorioPuerto   │   │
-│             │                     │  ServicioClientePuerto   │   │
-│  ┌──────────▼──────────────────────▼──────────────────────┐  │   │
-│  │               APLICACION (casos de uso)                 │  │   │
-│  │                                                         │  │   │
-│  │  AgendarCitaUseCase   — verifica servicio activo,      │  │   │
-│  │                         conflicto horario, crea Cita   │  │   │
-│  │  ConfirmarCitaUseCase — verifica stock,                │  │   │
-│  │                         llama cita.confirmar()         │  │   │
-│  │  CancelarCitaUseCase  — llama cita.cancelar()          │  │   │
-│  │  ConsultarCitaUseCase — busca por ID                   │  │   │
-│  │                                                         │  │   │
-│  │  ┌───────────────────────────────────────────────────┐ │  │   │
-│  │  │               DOMINIO (nucleo puro)               │ │  │   │
-│  │  │                                                   │ │  │   │
-│  │  │  Entidad Cita — Java puro, sin Spring ni Mongo    │ │  │   │
-│  │  │    confirmar() — valida que no este cancelada     │ │  │   │
-│  │  │    cancelar()  — valida estado                    │ │  │   │
-│  │  │    constructor — valida fecha futura              │ │  │   │
-│  │  │                                                   │ │  │   │
-│  │  │  Excepciones de dominio:                          │ │  │   │
-│  │  │    CitaNotFoundException                          │ │  │   │
-│  │  │    CitaConflictoException                         │ │  │   │
-│  │  │    CitaEstadoInvalidoException                    │ │  │   │
-│  │  │    FechaCitaInvalidaException                     │ │  │   │
-│  │  │    ReglaNegocioCitaException                      │ │  │   │
-│  │  │    ServicioInactivoException                      │ │  │   │
-│  │  └───────────────────────────────────────────────────┘ │  │   │
-│  └─────────────────────────────────────────────────────────┘  │   │
-└──────────────────────────────────────────────────────────────────┘
-```
+<img width="1284" height="713" alt="image" src="https://github.com/user-attachments/assets/f37f1092-7498-4e23-b5b7-0136dea79477" />
+
 
 ### Estructura de carpetas (citas-service)
 
